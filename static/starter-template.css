@@ -1,5 +1,9 @@
 body {
-  padding-top: 50px;
+  background-image: url("https://wallpapercave.com/wp/wp1848344.jpg");
+  background-color: rgb(129, 252, 215);
+  background-blend-mode: hard-light;
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 .starter-template {
   padding: 40px 15px;

@@ -4,9 +4,9 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField
 from wtforms.validators import InputRequired, Email, Length
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
+#from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-
+from argon2 import PasswordHasher
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'Thisissupposedtobesecret!'
@@ -16,6 +16,8 @@ db = SQLAlchemy(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+ph = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=4,
+                    hash_len=32, salt_len=16, encoding="utf-8")  # argon2id
 
 
 class User(UserMixin, db.Model):
@@ -59,12 +61,14 @@ def login():
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
         if user:
-            if check_password_hash(user.password, form.password.data):
-                login_user(user, remember=form.remember.data)
-                return redirect(url_for('dashboard'))
+            try:
+                if ph.verify(user.password, form.password.data):
+                    login_user(user, remember=form.remember.data)
+                    return redirect(url_for('dashboard'))
+            except:
+                print("Invalid username or password!")
 
-        return '<h1>Invalid username or password</h1>'
-        # return '<h1>' + form.username.data + ' ' + form.password.data + '</h1>'
+        return render_template('login.html', form=form, warning="Invalid")
 
     return render_template('login.html', form=form)
 
@@ -74,15 +78,15 @@ def signup():
     form = RegisterForm()
 
     if form.validate_on_submit():
-        hashed_password = generate_password_hash(
-            form.password.data, method='sha256')
+
+        #hashed_password = generate_password_hash(form.password.data, method='sha256')
+        hashed_password = ph.hash(form.password.data)
         new_user = User(username=form.username.data,
                         email=form.email.data, password=hashed_password)
         db.session.add(new_user)
         db.session.commit()
 
         return '<h1>New user has been created!</h1>'
-        # return '<h1>' + form.username.data + ' ' + form.email.data + ' ' + form.password.data + '</h1>'
 
     return render_template('signup.html', form=form)
 

@@ -100,3 +100,18 @@ body {
   display: inline-block;
   border-radius: 50%;
 }
+
+ /* Style buttons */
+.btn2 {
+  background-color: DodgerBlue; /* Blue background */
+  border: none; /* Remove borders */
+  color: white; /* White text */
+  padding: 2px 10px; /* Some padding */
+  font-size: 14px; /* Set a font size */
+  cursor: pointer; /* Mouse pointer on hover */
+}
+
+/* Darker background on mouse-over */
+.btn2:hover {
+  background-color: RoyalBlue;
+} 

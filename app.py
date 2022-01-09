@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, render_template, redirect, url_for, flash
 from flask_bootstrap import Bootstrap
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField
@@ -7,6 +7,7 @@ from flask_sqlalchemy import SQLAlchemy
 #from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from argon2 import PasswordHasher
+import flask
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'Thisissupposedtobesecret!'
@@ -75,6 +76,9 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     form = LoginForm()
+    if flask.request.method == "GET":
+        return render_template('login.html', form=form)
+
     user = User.query.filter_by(username=form.username.data).first()
     if form.validate_on_submit() and user:
         try:
@@ -82,27 +86,31 @@ def login():
                 login_user(user, remember=form.remember.data)  # create cookie
                 return redirect(url_for('dashboard'))
         except:
+            flash("Wrong username or password!")
             return redirect(url_for('login'))
 
-    return render_template('login.html', form=form, warning="")
+    flash("Wrong username or password!")
+    return redirect(url_for('login'))
 
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     form = RegisterForm()
-
+    if flask.request.method == "GET":
+        return render_template('signup.html', form=form)
     if form.validate_on_submit():
-
-        #hashed_password = generate_password_hash(form.password.data, method='sha256')
         hashed_password = ph.hash(form.password.data)
         new_user = User(username=form.username.data,
                         email=form.email.data, password=hashed_password)
         db.session.add(new_user)
         db.session.commit()
 
-        return '<h1>New user has been created!</h1>'
+        flash("New user has been created!", "info")
+        return redirect(url_for('signup'))
 
-    return render_template('signup.html', form=form)
+    flash("Account creation failed!", "error")
+    return redirect(url_for('signup'))
+
 
 
 @app.route('/dashboard', methods=['GET', 'POST'])
@@ -120,7 +128,9 @@ def dashboard():
         info = "Success"
         return redirect(url_for('dashboard'))
 
-    return render_template('dashboard.html', form=form, name=current_user.username, info=info)
+    password_array = db.session.query(Password).all()
+
+    return render_template('dashboard.html', form=form, name=current_user.username, info=info, password_array=password_array)
 
 
 @app.route('/logout')

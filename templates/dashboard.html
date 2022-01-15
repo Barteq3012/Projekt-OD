@@ -55,12 +55,18 @@ Dashboard
               {{ wtf.form_field(form.password) }}
               {{ wtf.form_field(form.public) }}
               <button class="btn btn-lg btn-primary btn-block" type="submit">Add password</button>
-              {% if info == "Success" %}
-              <h5 style="color:green">Udało się dodać hasło!</h5>
-              {% endif %}
-              {% if info == "Failure" %}
-              <h5 style="color:red">Nie udało się dodać hasła!</h5>
-              {% endif %}
+              {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                  {% for category, message in messages %}
+                    {% if category=="error" %}
+                      <h5 style="color:red">{{message}}</h5>
+                    {% endif %}
+                    {% if category=="info" %}
+                      <h5 style="color:green">{{message}}</h5>
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+              {% endwith %}
             </form>
 
           <h2 class="sub-header">Section title</h2>

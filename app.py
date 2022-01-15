@@ -1,6 +1,3 @@
-from asyncio.windows_events import NULL
-import random
-import string
 from flask import Flask, render_template, redirect, url_for, flash, request
 from flask_bootstrap import Bootstrap
 from flask_wtf import FlaskForm
@@ -10,11 +7,14 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from argon2 import PasswordHasher
 from email.message import EmailMessage
+from email_validator import validate_email, EmailNotValidError
 import flask
 import re
 import math
 import datetime
 import smtplib
+import random
+import string
 
 min_password_length = 12
 max_password_length = 80
@@ -124,6 +124,15 @@ def login():
         return redirect(url_for('login'))
 
     if form.validate_on_submit() and user:
+        # wstępna walidacja danych
+        if verify_username(form.username.data) == 1:
+            flash("Wrong username or password!")
+            return redirect(url_for('login'))
+
+        if verify_password(form.password.data, False) == 1:
+            flash("Wrong username or password!")
+            return redirect(url_for('login'))
+
         waiting_time = verify_date(user.failed_login_date)
         if waiting_time > 0:
             min = int(waiting_time / 60)
@@ -157,7 +166,7 @@ def signup():
     email = form.email.data
     password = form.password.data
     verify_ue = verify_username_and_email(username, email)
-    verify_p = verify_password(password)
+    verify_p = verify_password(password, True)
     if form.validate_on_submit() and (verify_ue == 0) and (verify_p == 0):
         hashed_password = ph.hash(password)
         new_user = User(username=username,
@@ -170,6 +179,10 @@ def signup():
         flash("User with this username already exists!", "error")
     if verify_ue == 2:
         flash("There is an account assigned to this email!", "error")
+    if verify_ue == 3:
+        flash("Invalid username! It can contain only letters and numbers.", "error")
+    if verify_ue == 4:
+        flash("Invalid email!", "error")
 
     if verify_p != 0:
         flash("Your password is too weak!", "error")
@@ -189,19 +202,47 @@ def verify_username_and_email(username, email):
         return 1
     if user_e:
         return 2
+    if verify_username(username) == 1:
+        return 3
+    if verify_email(email) == 1:
+        return 4
     return 0
 
 
-def verify_password(password):
+def verify_password(password, check_entropy):
     regex = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{12,80}$"
     match = re.compile(regex)
     res = re.search(match, password)
     if not res:
         return 1
-    if entropy(password) < enthropy_threshold:
-        return 2
+    if check_entropy == True:    
+        if entropy(password) < enthropy_threshold:
+            return 2
     return 0
 
+def verify_description(description):
+    regex = "^((?=.*[a-z])|(?=.*[A-Z]))[A-Za-z\d\s]{3,100}$"
+    match = re.compile(regex)
+    res = re.search(match, description)
+    if not res:
+        return 1
+    return 0
+
+def verify_username(username):
+    regex = "^((?=.*[a-z])|(?=.*[A-Z]))[A-Za-z\d]{6,20}$"
+    match = re.compile(regex)
+    res = re.search(match, username)
+    if not res:
+        return 1
+    return 0
+
+# to przepuszcza znaki typu "*", do gmail są dozwolone tylko: [a-z][0-9]\.{6,}
+def verify_email(email):
+    try:
+        validate_email(email)
+    except EmailNotValidError:
+        return 1
+    return 0
 
 def verify_date(date):
     if(date is None):
@@ -249,20 +290,28 @@ def random_password(length):
 @login_required
 def dashboard():
     form = PasswordForm()
-    info = ""
+
     if form.validate_on_submit():
+        if verify_description(form.description.data) == 1:
+            flash("Invalid description!", "error")
+            return redirect(url_for('dashboard'))
+
+        # tu już bez sprawdzania entropii
+        if verify_password(form.password.data, False) == 1:
+            flash("Invalid password! Use at least one: uppercase and lowercase letter, digit and special sign from: @$!%*#?&", "error")
+            return redirect(url_for('dashboard'))
 
         encrypted_password = form.password.data  # szyfrownie symetryczne
         new_passwd = Password(description=form.description.data,
                               password=encrypted_password, public=form.public.data, userid=current_user.id)
         db.session.add(new_passwd)
         db.session.commit()
-        info = "Success"
+        flash("Password has been added!", "info")
         return redirect(url_for('dashboard'))
 
     password_array = db.session.query(Password).all()
 
-    return render_template('dashboard.html', form=form, name=current_user.username, info=info, password_array=password_array)
+    return render_template('dashboard.html', form=form, name=current_user.username, password_array=password_array)
 
 
 @app.route('/logout')

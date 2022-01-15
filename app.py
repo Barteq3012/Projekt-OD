@@ -1,15 +1,20 @@
-from flask import Flask, render_template, redirect, url_for, flash
+from asyncio.windows_events import NULL
+import random
+import string
+from flask import Flask, render_template, redirect, url_for, flash, request
 from flask_bootstrap import Bootstrap
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField
 from wtforms.validators import InputRequired, Email, Length
 from flask_sqlalchemy import SQLAlchemy
-#from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from argon2 import PasswordHasher
+from email.message import EmailMessage
 import flask
 import re
 import math
+import datetime
+import smtplib
 
 min_password_length = 12
 max_password_length = 80
@@ -20,10 +25,12 @@ max_email_length = 320
 min_description_length = 3
 max_description_length = 100
 enthropy_threshold = 3.5
+failed_login_seconds = 1800
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'Thisissupposedtobesecret!'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///C:\\Users\\barte\\Documents\\Projekt_Ochrona_Danych\\Projekt-OD\\database.db'
+
 bootstrap = Bootstrap(app)
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -31,7 +38,6 @@ login_manager.login_view = 'login'
 login_manager.init_app(app)
 ph = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=4,
                     hash_len=32, salt_len=16, encoding="utf-8")  # argon2id
-warning = None
 
 
 class User(UserMixin, db.Model):
@@ -41,6 +47,8 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(max_email_length), unique=True, nullable=False)
     password = db.Column(db.String(max_password_length), nullable=False)
     role = db.Column(db.String(20), default="user", nullable=False)
+    login_errors = db.Column(db.Integer, default=0, nullable=False)
+    failed_login_date = db.Column(db.DateTime, nullable=True)
 
 
 class Password(db.Model):
@@ -59,8 +67,8 @@ def load_user(user_id):
 class LoginForm(FlaskForm):
     username = StringField('username', validators=[
                            InputRequired(), Length(min=min_username_length, max=max_username_length)])
-    password = PasswordField('password', validators=[
-                             InputRequired(), Length(min=min_password_length, max=max_password_length)])
+    password = PasswordField('password', validators=[Length(
+        min=min_password_length, max=max_password_length)])
     remember = BooleanField('remember me')
 
 
@@ -93,13 +101,47 @@ def login():
         return render_template('login.html', form=form)
 
     user = User.query.filter_by(username=form.username.data).first()
+
+    if (flask.request.form.get('email') == "email") and user:
+        email = user.email
+        username = user.username
+        password = random_password(16)
+        user.password = ph.hash(password)
+        db.session.commit()
+        s = smtplib.SMTP(host='smtp.gmail.com', port=587)
+        s.starttls()
+        s.login('przypomnienie.hasla2@gmail.com',
+                'OchronaDanych1234!')  # haslo do env
+        msg = EmailMessage()
+        msg.set_content('Witaj ' + username +
+                        ' twoje nowe hasło to: ' + password)
+        msg['Subject'] = 'Przypomnienie hasła'
+        msg['From'] = 'Ochrona Danych'
+        msg['To'] = f'{email}'
+        s.send_message(msg)
+        s.quit()
+        flash("Message has been sended!")
+        return redirect(url_for('login'))
+
     if form.validate_on_submit() and user:
+        waiting_time = verify_date(user.failed_login_date)
+        if waiting_time > 0:
+            min = int(waiting_time / 60)
+            sec = waiting_time % 60
+            flash("You have exceeded the maximum number of tries(3)!")
+            flash("You have to wait: " + str(min) + " min " + str(sec) + " s")
+            return redirect(url_for('login'))
         try:
             if ph.verify(user.password, form.password.data):
                 login_user(user, remember=form.remember.data)  # create cookie
                 return redirect(url_for('dashboard'))
         except:
             flash("Wrong username or password!")
+            user.login_errors += 1
+            if user.login_errors >= 3:
+                user.failed_login_date = datetime.datetime.now()
+                user.login_errors = 0
+            db.session.commit()
             return redirect(url_for('login'))
 
     flash("Wrong username or password!")
@@ -161,6 +203,15 @@ def verify_password(password):
     return 0
 
 
+def verify_date(date):
+    if(date is None):
+        return -1
+    seconds = (datetime.datetime.now() - date).seconds
+    if seconds > failed_login_seconds:
+        return -1
+    return failed_login_seconds - seconds
+
+
 def entropy(password):
     stat = {}
     ent = 0
@@ -180,6 +231,18 @@ def entropy(password):
         ent += -(p * math.log2(p))
 
     return ent
+
+
+def random_password(length):
+    lower = string.ascii_lowercase
+    upper = string.ascii_uppercase
+    num = string.digits
+    symbols = '@$!%*#?&'
+    all = lower + upper + num + symbols
+    tmp = random.sample(all, length)
+    password = "".join(tmp)
+    entropy(password)
+    return(password)
 
 
 @app.route('/dashboard', methods=['GET', 'POST'])

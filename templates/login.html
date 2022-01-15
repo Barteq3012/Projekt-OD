@@ -41,6 +41,8 @@ Login
         {{ wtf.form_field(form.password) }}
         {{ wtf.form_field(form.remember) }}
         <button class="btn btn-lg btn-primary btn-block" type="submit">Sign in</button>
+        <h5 style="color:black">Have you forgotten your password?</h5>
+        <button class="link-btn" name="email" value="email">Send an email with a new password!</button>
         {% with messages = get_flashed_messages() %}
           {% if messages %}
             {% for msg in messages %}

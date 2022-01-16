@@ -15,6 +15,7 @@ import datetime
 import smtplib
 import random
 import string
+import time
 
 min_password_length = 12
 max_password_length = 80
@@ -26,6 +27,7 @@ min_description_length = 3
 max_description_length = 100
 enthropy_threshold = 3.5
 failed_login_seconds = 1800
+login_delay = 1
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'Thisissupposedtobesecret!'
@@ -89,6 +91,15 @@ class PasswordForm(FlaskForm):
     public = BooleanField('public')
 
 
+class ChangePasswordForm(FlaskForm):
+    current_password = PasswordField('current password', validators=[
+                                     InputRequired(), Length(min=min_password_length, max=max_password_length)])
+    new_password = PasswordField('new password', validators=[
+                                 InputRequired(), Length(min=min_password_length, max=max_password_length)])
+    confirm_password = PasswordField('confirm password', validators=[
+                                     InputRequired(), Length(min=min_password_length, max=max_password_length)])
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -124,6 +135,7 @@ def login():
         return redirect(url_for('login'))
 
     if form.validate_on_submit() and user:
+        time.sleep(login_delay)
         # wstępna walidacja danych
         if verify_username(form.username.data) == 1:
             flash("Wrong username or password!")
@@ -215,10 +227,11 @@ def verify_password(password, check_entropy):
     res = re.search(match, password)
     if not res:
         return 1
-    if check_entropy == True:    
+    if check_entropy == True:
         if entropy(password) < enthropy_threshold:
             return 2
     return 0
+
 
 def verify_description(description):
     regex = "^((?=.*[a-z])|(?=.*[A-Z]))[A-Za-z\d\s]{3,100}$"
@@ -227,6 +240,7 @@ def verify_description(description):
     if not res:
         return 1
     return 0
+
 
 def verify_username(username):
     regex = "^((?=.*[a-z])|(?=.*[A-Z]))[A-Za-z\d]{6,20}$"
@@ -237,12 +251,15 @@ def verify_username(username):
     return 0
 
 # to przepuszcza znaki typu "*", do gmail są dozwolone tylko: [a-z][0-9]\.{6,}
+
+
 def verify_email(email):
     try:
         validate_email(email)
     except EmailNotValidError:
         return 1
     return 0
+
 
 def verify_date(date):
     if(date is None):
@@ -312,6 +329,44 @@ def dashboard():
     password_array = db.session.query(Password).all()
 
     return render_template('dashboard.html', form=form, name=current_user.username, password_array=password_array)
+
+
+@app.route('/passwd_change', methods=['GET', 'POST'])
+@login_required
+def passwd_change():
+    form = ChangePasswordForm()
+
+    if form.validate_on_submit():
+        current = form.current_password.data
+        new = form.new_password.data
+        confirm = form.confirm_password.data
+        try:
+            if ph.verify(current_user.password, current):
+                if new != confirm:
+                    flash("Passwords are not the same!", "error")
+                    return redirect(url_for('passwd_change'))
+                verify_p = verify_password(new, True)
+                if verify_p != 0:
+                    flash("Your new password is too weak!", "error")
+                if verify_p == 1:
+                    flash(
+                        "Use at least one: uppercase and lowercase letter, digit and special sign from: @$!%*#?&", "error")
+                    return redirect(url_for('passwd_change'))
+                if verify_p == 2:
+                    flash(
+                        "Try to use more diffrent signs to increase entrophy.", "error")
+                    return redirect(url_for('passwd_change'))
+                user = User.query.filter_by(
+                    username=current_user.username).first()
+                user.password = ph.hash(new)
+                db.session.commit()
+                flash("Password has been changed!", "info")
+                return redirect(url_for('passwd_change'))
+        except:
+            flash("Invalid current password!", "error")
+            return redirect(url_for('passwd_change'))
+
+    return render_template('passwd_change.html', form=form, name=current_user.username)
 
 
 @app.route('/logout')

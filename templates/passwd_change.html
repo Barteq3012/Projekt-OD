@@ -1,0 +1,76 @@
+{% extends "bootstrap/base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+
+{% block title %}
+Change password
+{% endblock %}
+
+{% block styles %}
+{{super()}}
+<link rel="stylesheet" href="{{url_for('.static', filename='dashboard.css')}}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+{% endblock %}
+
+{% block content %}
+<nav class="navbar navbar-inverse navbar-fixed-top">
+    <div class="container-fluid">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar"
+                aria-expanded="false" aria-controls="navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="/">Security Project</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+            <ul class="nav navbar-nav navbar-right">
+                <li><a href="\dashboard">Dashboard</a></li>
+                <li><a href="\">Profile</a></li>
+                <li><a href="{{ url_for('logout') }}">Log Out</a></li>
+            </ul>
+            <form class="navbar-form navbar-right">
+                <input type="text" class="form-control" placeholder="Search...">
+            </form>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-sm-3 col-md-2 sidebar">
+            <ul class="nav nav-sidebar">
+                <li><a href="\dashboard">Dashboard<span class="sr-only">(current)</span></a></li>
+                <li class="active"><a href="\passwd_change">Change password</a></li>
+            </ul>
+
+        </div>
+        <div class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">
+            <h1 class="page-header">Welcome, {{ name }}</h1>
+
+            <form method="POST" action="/passwd_change">
+                <h2>Change password</h2>
+                {{ form.hidden_tag() }}
+                {{ wtf.form_field(form.current_password) }}
+                {{ wtf.form_field(form.new_password) }}
+                {{ wtf.form_field(form.confirm_password) }}
+                <button class="btn btn-lg btn-primary btn-block" type="submit">Change password</button>
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                {% if category=="error" %}
+                <h5 style="color:red">{{message}}</h5>
+                {% endif %}
+                {% if category=="info" %}
+                <h5 style="color:green">{{message}}</h5>
+                {% endif %}
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+            </form>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

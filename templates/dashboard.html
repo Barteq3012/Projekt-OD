@@ -98,12 +98,12 @@ Dashboard
                         } 
                       }
                     </script>
-                {% for item in password_array %}
+                {% for item, password in zip(password_obj_array, password_array) %}
                 <tr>
                   <td>{{item.id}}</td>
                   <td>{{item.description}}</td>
                   <td>
-                  <input type="password" style="border: 0;" value={{item.password}} size=80 disabled id={{item.id}}>
+                  <input type="password" style="border: 0;" value={{password}} size=80 disabled id={{item.id}}>
                   <button class="btn2" id={{item.id}} onClick="changeType()"><i class="fa fa-eye-slash" aria-hidden="true" id={{"-"+item.id|string}}></i></button>
                   </td>
                   <td>{{item.public}}</td>

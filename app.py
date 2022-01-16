@@ -16,6 +16,10 @@ import smtplib
 import random
 import string
 import time
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
+from Crypto.Protocol.KDF import PBKDF2
+import Padding
 
 min_password_length = 12
 max_password_length = 80
@@ -28,6 +32,10 @@ max_description_length = 100
 enthropy_threshold = 3.5
 failed_login_seconds = 1800
 login_delay = 1
+
+initialization_vector = b'\xfc\\\x7f\xa3\xc9`\x05\x87\x898zlK\x06\xc8\x92'
+aes_password = "thisissupersecretpassword"
+aes_key = PBKDF2(aes_password.encode(), b"salt", dkLen=32)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'Thisissupposedtobesecret!'
@@ -303,6 +311,7 @@ def random_password(length):
     return(password)
 
 
+
 @app.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 def dashboard():
@@ -318,7 +327,9 @@ def dashboard():
             flash("Invalid password! Use at least one: uppercase and lowercase letter, digit and special sign from: @$!%*#?&", "error")
             return redirect(url_for('dashboard'))
 
-        encrypted_password = form.password.data  # szyfrownie symetryczne
+        password = form.password.data
+        password = Padding.appendPadding(password, blocksize=Padding.AES_blocksize, mode='CMS')  # Cryptographic Message Syntax
+        encrypted_password = encrypt(password.encode())  # szyfrownie symetryczne
         new_passwd = Password(description=form.description.data,
                               password=encrypted_password, public=form.public.data, userid=current_user.id)
         db.session.add(new_passwd)
@@ -326,9 +337,27 @@ def dashboard():
         flash("Password has been added!", "info")
         return redirect(url_for('dashboard'))
 
-    password_array = db.session.query(Password).all()
+    password_obj_array = db.session.query(Password).all()
+    password_array = []
+    for item in password_obj_array:
+        #item2 = Padding.appendPadding(item.password, blocksize=Padding.AES_blocksize, mode='CMS')
+        decrypted = decrypt(item.password)
+        passwd = Padding.removePadding(decrypted.decode(), mode='CMS')
+        print(passwd)
+        password_array.append(passwd)
 
-    return render_template('dashboard.html', form=form, name=current_user.username, password_array=password_array)
+    #password_array = list(map(decrypt, password_array))
+    return render_template('dashboard.html', form=form, name=current_user.username, password_array=password_array, password_obj_array=password_obj_array, zip=zip)
+
+
+def encrypt(plaintext):
+    aes = AES.new(aes_key, AES.MODE_CBC, initialization_vector)
+    return(aes.encrypt(plaintext))
+
+
+def decrypt(ciphertext):
+    aes = AES.new(aes_key, AES.MODE_CBC, initialization_vector)
+    return(aes.decrypt(ciphertext))
 
 
 @app.route('/passwd_change', methods=['GET', 'POST'])

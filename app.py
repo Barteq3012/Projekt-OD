@@ -311,7 +311,6 @@ def random_password(length):
     return(password)
 
 
-
 @app.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 def dashboard():
@@ -328,8 +327,7 @@ def dashboard():
             return redirect(url_for('dashboard'))
 
         password = form.password.data
-        password = Padding.appendPadding(password, blocksize=Padding.AES_blocksize, mode='CMS')  # Cryptographic Message Syntax
-        encrypted_password = encrypt(password.encode())  # szyfrownie symetryczne
+        encrypted_password = encrypt(password)  # szyfrownie symetryczne
         new_passwd = Password(description=form.description.data,
                               password=encrypted_password, public=form.public.data, userid=current_user.id)
         db.session.add(new_passwd)
@@ -338,26 +336,31 @@ def dashboard():
         return redirect(url_for('dashboard'))
 
     password_obj_array = db.session.query(Password).all()
+    password_obj_array = [
+        i for i in password_obj_array if i.public == True or i.userid == current_user.id]
     password_array = []
     for item in password_obj_array:
-        #item2 = Padding.appendPadding(item.password, blocksize=Padding.AES_blocksize, mode='CMS')
-        decrypted = decrypt(item.password)
-        passwd = Padding.removePadding(decrypted.decode(), mode='CMS')
-        print(passwd)
-        password_array.append(passwd)
+        if (item.public == True) or (item.userid == current_user.id):
+            decrypted = decrypt(item.password)
+            password_array.append(decrypted)
 
-    #password_array = list(map(decrypt, password_array))
     return render_template('dashboard.html', form=form, name=current_user.username, password_array=password_array, password_obj_array=password_obj_array, zip=zip)
 
 
 def encrypt(plaintext):
+    plain_padd = Padding.appendPadding(
+        plaintext, blocksize=Padding.AES_blocksize, mode='CMS')  # Cryptographic Message Syntax
+    plain_padd = plain_padd.encode()
     aes = AES.new(aes_key, AES.MODE_CBC, initialization_vector)
-    return(aes.encrypt(plaintext))
+    ciphertext = aes.encrypt(plain_padd)
+    return(ciphertext)
 
 
 def decrypt(ciphertext):
     aes = AES.new(aes_key, AES.MODE_CBC, initialization_vector)
-    return(aes.decrypt(ciphertext))
+    decrypted = aes.decrypt(ciphertext)
+    plaintext = Padding.removePadding(decrypted.decode(), mode='CMS')
+    return(plaintext)
 
 
 @app.route('/passwd_change', methods=['GET', 'POST'])

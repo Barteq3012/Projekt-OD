@@ -1,3 +1,2 @@
-# Projekt-OD
-Projekt - Ochrona Danych
-Napisany we flask, bez części serwerowej.
+# Projekt Ochrona Danych
+Projekt napisany we flask, bez części serwerowej. Aplikacja służy do przechowywania haseł.
